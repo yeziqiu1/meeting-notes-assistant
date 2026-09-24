@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c3a">
+  <meta name="description" content="会议纪要总结分类、原文问答与润色助手">
+  <title>会议纪要助手</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img"><path d="M12 8h20a6 6 0 0 1 6 6v26H18a6 6 0 0 1-6-6V8Z"/><path d="M18 8v26a6 6 0 0 0 6 6"/><path d="M23 17h10M23 23h10M23 29h7"/></svg>
+        </div>
+        <div>
+          <h1>会议纪要助手</h1>
+          <p>总结分类 · 原文问答 · 专业润色</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="modeBadge" class="badge local">本地基础模式</span>
+        <button id="settingsBtn" class="icon-btn" type="button" aria-label="打开设置" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.37.33.71.6 1 .3.27.68.4 1.1.4H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.6Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice">
+      <span>当前无需登录即可使用基础整理。配置模型接口后，可获得更高质量的总结、问答和润色。</span>
+      <button id="noticeSettingsBtn" type="button">立即配置</button>
+    </div>
+
+    <main class="layout">
+      <section class="panel notes-panel" aria-labelledby="notesTitle">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">原始材料</span>
+            <h2 id="notesTitle">会议纪要</h2>
+          </div>
+          <button id="clearBtn" class="text-btn danger" type="button">清空</button>
+        </div>
+
+        <label id="dropZone" class="drop-zone" for="fileInput">
+          <input id="fileInput" type="file" accept=".txt,.md,.markdown,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+          <span>拖入或选择文件</span>
+          <small>支持 TXT、Markdown、DOCX；也可以直接在下方粘贴</small>
+        </label>
+
+        <textarea id="notesInput" placeholder="把会议记录粘贴到这里，例如：&#10;今天讨论了论文投稿安排……&#10;下一步需要收集病例……" spellcheck="false"></textarea>
+
+        <div class="notes-meta">
+          <span id="charCount">0 字</span>
+          <span>内容只保存在你的浏览器中</span>
+        </div>
+
+        <div class="quick-actions">
+          <button id="sampleBtn" class="ghost-btn" type="button">放入示例</button>
+          <button id="summaryGoBtn" class="primary-btn" type="button">开始整理</button>
+        </div>
+      </section>
+
+      <section class="panel workspace" aria-labelledby="workspaceTitle">
+        <div class="workspace-head">
+          <div>
+            <span class="eyebrow">工作区</span>
+            <h2 id="workspaceTitle">整理结果</h2>
+          </div>
+          <button id="copyBtn" class="ghost-btn small" type="button">复制结果</button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="功能">
+          <button class="tab active" data-tab="summary" role="tab" aria-selected="true">总结分类</button>
+          <button class="tab" data-tab="ask" role="tab" aria-selected="false">原文问答</button>
+          <button class="tab" data-tab="polish" role="tab" aria-selected="false">润色补全</button>
+        </div>
+
+        <div id="summaryPanel" class="tab-panel active" role="tabpanel">
+          <div class="panel-intro">
+            <h3>把零散记录变成可执行纪要</h3>
+            <p>提取主题、结论、待办、关键数字、未解决问题和风险。</p>
+          </div>
+          <button id="summaryBtn" class="primary-btn wide" type="button">生成结构化纪要</button>
+          <div id="summaryResult" class="result empty">
+            <div class="empty-state">
+              <strong>等待整理</strong>
+              <span>导入或粘贴纪要后，点击“生成结构化纪要”。</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="askPanel" class="tab-panel" role="tabpanel" hidden>
+          <div class="panel-intro">
+            <h3>只根据你的纪要回答</h3>
+            <p>不知道、没记录或存在歧义时会直接说明，不补充外部事实。</p>
+          </div>
+          <div class="ask-row">
+            <input id="questionInput" type="text" placeholder="例如：线粒体移植用了哪些数据集？" autocomplete="off">
+            <button id="askBtn" class="primary-btn" type="button">提问</button>
+          </div>
+          <div class="suggestions">
+            <button type="button" data-question="这份纪要主要讲了哪些方面？">主要讲了什么？</button>
+            <button type="button" data-question="有哪些待办事项和未解决问题？">有哪些待办？</button>
+            <button type="button" data-question="纪要中出现了哪些关键数字、日期或地点？">关键数字</button>
+          </div>
+          <div id="askResult" class="result empty">
+            <div class="empty-state">
+              <strong>等待提问</strong>
+              <span>答案会尽量附上对应的原文依据。</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="polishPanel" class="tab-panel" role="tabpanel" hidden>
+          <div class="panel-intro">
+            <h3>补全表达，不补造事实</h3>
+            <p>改善语句和结构；缺失信息会用【待补充：……】标出。</p>
+          </div>
+          <div class="polish-controls">
+            <label>
+              <span>输出风格</span>
+              <select id="polishStyle">
+                <option value="faithful">忠实修订版</option>
+                <option value="formal">正式会议纪要版</option>
+              </select>
+            </label>
+            <button id="polishBtn" class="primary-btn" type="button">开始润色</button>
+          </div>
+          <div id="polishResult" class="result empty">
+            <div class="empty-state">
+              <strong>等待润色</strong>
+              <span>原记录不完整也可以处理，缺失事实会保留为待确认项。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="workspace-foot">
+          <button id="downloadBtn" class="ghost-btn" type="button">导出 Markdown</button>
+          <span id="statusText">准备就绪</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-head">
+        <div>
+          <span class="eyebrow">增强能力</span>
+          <h2 id="settingsTitle">模型接口设置</h2>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal aria-label="关闭">×</button>
+      </div>
+      <p class="modal-note">不填也可以使用本地基础模式。若填写，密钥只保存在当前浏览器中，只有在点击功能按钮时才会发送到你自己配置的接口。</p>
+      <label class="field">
+        <span>接口地址</span>
+        <input id="baseUrlInput" type="url" placeholder="https://api.openai.com/v1">
+        <small>填写兼容 Chat Completions 的 API 根地址。</small>
+      </label>
+      <label class="field">
+        <span>模型名称</span>
+        <input id="modelInput" type="text" placeholder="gpt-4.1-mini">
+      </label>
+      <label class="field">
+        <span>API 密钥</span>
+        <input id="apiKeyInput" type="password" placeholder="sk-...">
+      </label>
+      <label class="check-row">
+        <input id="rememberKey" type="checkbox">
+        <span>在此浏览器中记住密钥</span>
+      </label>
+      <div class="modal-actions">
+        <button id="resetSettingsBtn" class="ghost-btn" type="button">恢复默认</button>
+        <button id="saveSettingsBtn" class="primary-btn" type="button">保存设置</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
