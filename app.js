@@ -368,6 +368,7 @@
     if (/GSE217801/.test(text) && /内皮细胞/.test(text)) facts.push("GSE217801被划分为8种细胞，拟针对内皮细胞开展分析。");
     if (/内膜损失|再狭窄/.test(text)) facts.push("研究提出，内膜损伤后再狭窄过程伴随氧化磷酸化变化。");
     if (/维持溶酶体酸化/.test(text)) facts.push("机制方面关注维持溶酶体酸化与上述变化之间的关系。");
+    if (/纯化/.test(text)) facts.push("所用线粒体已完成纯化。");
 
     const questions = [];
     if (/人脐静脉内皮细胞/.test(text)) questions.push("为什么选择人脐静脉内皮细胞");
@@ -910,6 +911,7 @@
   renderMode();
   if (settings.apiKey) setStatus("模型增强模式已就绪");
 })();
+
 
 
 
