@@ -215,7 +215,7 @@
     const summaryHeadings = new Set([
       "会议纪要整理", "一句话概览", "会议信息", "主题分类", "主题内容",
       "明确结论", "待办事项", "待办与后续", "关键事实与数字", "关键数字与事实",
-      "未解决问题", "风险与注意事项", "建议追问", "修改说明", "通用待确认事项", "已有分类", "已有分类（保持完整，不拆分）", "其他主题", "其他主题内容",
+      "未解决问题", "风险与注意事项", "建议追问", "修改说明", "通用待确认事项", "已有分类", "已有分类（保持完整，不拆分）", "原顺序内容（保持完整，不拆分）", "其他主题", "其他主题内容",
       "待确认问题", "记录要点"
     ]);
     const lines = [];
@@ -253,7 +253,91 @@
       .filter(Boolean);
   }
 
+  function cleanStructuredHeading(line) {
+    return String(line || "")
+      .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+      .replace(/^#{1,6}\s*/, "")
+      .replace(/^\s*(?:\d+[.、]|[-*+])\s+/, "")
+      .replace(/[：:]\s*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isStructuredHeading(rawLine) {
+    const raw = String(rawLine || "").trim();
+    if (!raw) return false;
+    const numbered = raw.match(/^\s*(?:\d+[.、]|[-*+])\s+(.+)$/);
+    const text = cleanStructuredHeading(numbered ? numbered[1] : raw);
+    if (!text || text.length > 40 || /[。！？；]$/.test(text)) return false;
+    if (/^(其他主题|已有分类|会议纪要|主题分类|主题内容|待办|关键|未解决|建议|修改说明|通用待确认)/.test(text)) return true;
+    if (/方向$|问题$/.test(text)) return true;
+    const categoryHeading = CATEGORY_RULES.some((rule) => rule.re.test(text));
+    const normalizedTitle = normalizeSectionKey(text);
+    const exactCategory = CATEGORY_RULES.some((rule) => rule.name === normalizedTitle);
+    if (numbered) {
+      return text.length <= 24 && !/[，。；！？]/.test(text) && (
+        exactCategory || /方向$|问题$/.test(text) || /^(其他主题|已有分类|主题内容|其他主题内容)/.test(text)
+      );
+    }
+    return categoryHeading;
+  }
+
+  function normalizeSectionKey(title) {
+    return cleanStructuredHeading(title).replace(/（.*?）\s*$/, "").replace(/^CEC\s*/i, "").trim();
+  }
+
+  function extractStructuredSections(text) {
+    const source = String(text || "").replace(/&#x20;|&#32;|&nbsp;/gi, " ").replace(/\r/g, "");
+    const lines = source.split("\n").map((line) => line.trim()).filter(Boolean);
+    const headingCount = lines.filter(isStructuredHeading).length;
+    const numberedCount = lines.filter((line) => /^\s*(?:\d+[.、]|[-*+])\s+/.test(line)).length;
+    const isStructured = headingCount >= 2 || (headingCount >= 1 && numberedCount >= 2);
+    if (!isStructured) return { isStructured: false, sections: [], remainingText: source };
+
+    const consumed = new Set();
+    const sections = [];
+    const byKey = new Map();
+    let current = null;
+    lines.forEach((line, index) => {
+      if (isStructuredHeading(line)) {
+        const title = cleanStructuredHeading(line);
+        consumed.add(index);
+        if (/^(其他主题|已有分类|主题内容|其他主题内容)/.test(title)) {
+          current = null;
+          return;
+        }
+        const key = normalizeSectionKey(title);
+        if (byKey.has(key)) current = byKey.get(key);
+        else {
+          const exactCategory = CATEGORY_RULES.some((rule) => rule.name === key);
+          const level = current && current.level === 1 && current.items.length === 0 && !exactCategory ? 2 : 1;
+          current = { title, items: [], level };
+          sections.push(current);
+          byKey.set(key, current);
+        }
+        return;
+      }
+      if (!current) return;
+      const item = cleanManualItem(line);
+      if (item) current.items.push(item);
+      consumed.add(index);
+    });
+
+    sections.forEach((section) => {
+      const seen = new Set();
+      section.items = section.items.filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      });
+    });
+    const remainingText = lines.filter((_, index) => !consumed.has(index)).join("\n");
+    return { isStructured: true, sections, remainingText };
+  }
+
   function extractManualSections(text) {
+    const structured = extractStructuredSections(text);
+    if (structured.isStructured) return structured;
     const source = String(text || "").replace(/&#x20;|&#32;|&nbsp;/gi, " ").replace(/\r/g, "");
     const lines = source.split("\n").map((line) => line.trim()).filter(Boolean);
     const consumed = new Set();
@@ -319,9 +403,10 @@
     const output = ["# 会议纪要整理（本地基础版）", "", "## 一句话概览", overview, ""];
     const emitted = new Set();
     if (manual.sections.length) {
-      output.push("## 已有分类（保持完整，不拆分）");
+      output.push("## 原顺序内容（保持完整，不拆分）");
       manual.sections.forEach((section) => {
-        output.push("", `### ${section.title}`);
+        const sectionHeading = "#".repeat(Math.min(6, 2 + (section.level || 1)));
+        output.push("", `${sectionHeading} ${section.title}`);
         section.items.forEach((item, index) => {
           if (emitted.has(item)) return;
           emitted.add(item);
@@ -329,6 +414,7 @@
         });
       });
     }
+    if (manual.sections.length && !lines.length) return output.join("\n");
     if (orderedGroups.length) {
       output.push("", "## 其他主题（按内容数量排序）");
       orderedGroups.forEach(([category, items]) => {
@@ -510,9 +596,10 @@
     const groups = groupLinesByTopic(lines);
     const output = [style === "formal" ? "# 会议纪要（整理版）" : "# 纪要修订版", ""];
     if (manual.sections.length) {
-      output.push("## 已有分类（保持完整，不拆分）", "");
+      output.push("## 原顺序内容（保持完整，不拆分）", "");
       manual.sections.forEach((section) => {
-        output.push(`### ${section.title}`);
+        const sectionHeading = "#".repeat(Math.min(6, 2 + (section.level || 1)));
+        output.push(`${sectionHeading} ${section.title}`);
         section.items.forEach((item, index) => output.push(`${index + 1}. ${cleanSentence(item)}`));
         output.push("");
       });
@@ -1031,6 +1118,12 @@
   renderMode();
   if (settings.apiKey) setStatus("模型增强模式已就绪");
 })();
+
+
+
+
+
+
 
 
 
