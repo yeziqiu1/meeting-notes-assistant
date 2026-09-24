@@ -211,10 +211,24 @@
 
   function normalizeLines(text) {
     const raw = String(text || "").replace(/\r/g, "").split("\n").map((line) => line.trim()).filter(Boolean);
+    const categoryNames = new Set(CATEGORY_RULES.map((rule) => rule.name));
+    const summaryHeadings = new Set([
+      "会议纪要整理", "一句话概览", "会议信息", "主题分类", "主题内容",
+      "明确结论", "待办事项", "待办与后续", "关键事实与数字", "关键数字与事实",
+      "未解决问题", "风险与注意事项", "建议追问", "修改说明", "通用待确认事项",
+      "待确认问题", "记录要点"
+    ]);
     const lines = [];
+    const seen = new Set();
     raw.forEach((rawLine) => {
-      let line = rawLine.replace(/^(?:[-*+]\s+|\\[-*+]\s+)+/, "").trim();
-      if (!line) return;
+      const isHeading = /^#{1,6}\s+/.test(rawLine);
+      let line = rawLine.replace(/^#{1,6}\s*/, "").replace(/^(?:[-*+]\s+|\\[-*+]\s+)+/, "").trim();
+      line = line.replace(/^\*\*(.+?)\*\*[:：]?$/, "$1").trim();
+      if (!line || isHeading) return;
+      const headingKey = line.replace(/[：:]\s*$/, "").trim();
+      if (categoryNames.has(headingKey) || summaryHeadings.has(headingKey)) return;
+      if (seen.has(line)) return;
+      seen.add(line);
       if (line.length > 95 && !/[，。；！？、]\s*$/.test(line)) {
         line.split(/(?<=[。！？；])/).map((part) => part.trim()).filter(Boolean).forEach((part) => lines.push(part));
       } else lines.push(line);
@@ -247,16 +261,27 @@
       ? `本次记录主要涉及${overviewTopics.join("、")}等方面，共整理出${lines.length}条有效要点。类别按内容数量从多到少排列。`
       : `本次记录共整理出${lines.length}条有效要点，建议进一步补充会议背景和结论。`;
     const output = ["# 会议纪要整理（本地基础版）", "", "## 一句话概览", overview, "", "## 主题分类（按内容数量排序）"];
+    const emitted = new Set();
     orderedGroups.forEach(([category, items]) => {
       output.push("", `### ${category}`);
-      items.slice(0, 18).forEach((item) => output.push(`- ${item}`));
+      items.slice(0, 18).forEach((item) => {
+        if (emitted.has(item)) return;
+        emitted.add(item);
+        output.push(`- ${item}`);
+      });
       if (items.length > 18) output.push(`- 另有 ${items.length - 18} 条同类记录，建议配置模型接口后继续整合。`);
     });
+    const remainingActions = actionLines.filter((line) => !emitted.has(line));
+    remainingActions.forEach((line) => emitted.add(line));
     output.push("", "## 待办与后续");
-    if (actionLines.length) actionLines.forEach((line) => output.push(`- ${line}`));
+    if (remainingActions.length) remainingActions.forEach((line) => output.push(`- ${line}`));
+    else if (actionLines.length) output.push("- 相关待办内容已在上方主题分类中列出，不再重复。");
     else output.push("- 原文中没有识别到明确的待办表述。");
+    const remainingNumbers = numberLines.filter((line) => !emitted.has(line));
+    remainingNumbers.forEach((line) => emitted.add(line));
     output.push("", "## 关键数字与事实");
-    if (numberLines.length) numberLines.forEach((line) => output.push(`- ${line}`));
+    if (remainingNumbers.length) remainingNumbers.forEach((line) => output.push(`- ${line}`));
+    else if (numberLines.length) output.push("- 关键数字已在上方主题分类中列出，不再重复。");
     else output.push("- 原文中没有识别到明确数字。");
     output.push(
       "", "## 未解决问题",
@@ -923,6 +948,8 @@
   renderMode();
   if (settings.apiKey) setStatus("模型增强模式已就绪");
 })();
+
+
 
 
 
