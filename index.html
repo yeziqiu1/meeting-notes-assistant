@@ -76,6 +76,7 @@
           <button class="tab active" data-tab="summary" role="tab" aria-selected="true">总结分类</button>
           <button class="tab" data-tab="ask" role="tab" aria-selected="false">原文问答</button>
           <button class="tab" data-tab="polish" role="tab" aria-selected="false">润色补全</button>
+          <button class="tab" data-tab="save" role="tab" aria-selected="false">保存中心</button>
         </div>
 
         <div id="summaryPanel" class="tab-panel active" role="tabpanel">
@@ -137,6 +138,26 @@
           </div>
         </div>
 
+        <div id="savePanel" class="tab-panel" role="tabpanel" hidden>
+          <div class="panel-intro">
+            <h3>把重要纪要和整理结果保存在这里</h3>
+            <p>可以保存多份记录，之后随时打开、继续修改、导出或删除。</p>
+          </div>
+          <div class="save-form">
+            <input id="saveTitle" type="text" placeholder="给这份纪要起个名称，例如：9月组会" autocomplete="off">
+            <button id="saveWorkBtn" class="primary-btn" type="button">保存当前工作</button>
+            <button id="newSaveBtn" class="ghost-btn" type="button">新建保存</button>
+          </div>
+          <div class="save-toolbar">
+            <span id="saveSummary">还没有保存内容</span>
+            <button id="exportAllBtn" class="text-btn" type="button">备份全部</button>
+          </div>
+          <div id="savedList" class="saved-list">
+            <div class="saved-empty">保存后，会在这里显示纪要名称、保存时间和内容摘要。</div>
+          </div>
+          <p class="privacy-note">保存内容只存放在当前浏览器中，不会自动上传到网页服务器。</p>
+        </div>
+
         <div class="workspace-foot">
           <button id="downloadBtn" class="ghost-btn" type="button">导出 Markdown</button>
           <span id="statusText">准备就绪</span>
@@ -184,3 +205,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

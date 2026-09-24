@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEYS = { notes: "mna_notes_v1", settings: "mna_settings_v1" };
+  const STORAGE_KEYS = { notes: "mna_notes_v1", settings: "mna_settings_v1", saved: "mna_saved_v1" };
   const DEFAULT_SETTINGS = { baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "", rememberKey: false };
   const SAMPLE_NOTES = [
     "项目组会记录",
@@ -14,12 +14,14 @@
   ].join("\n");
 
   const CATEGORY_RULES = [
-    { name: "研究与实验", re: /实验|研究|课题|机制|细胞|线粒体|氧化|磷酸化|溶酶体|蛋白|基因|染色|GSE\d*|数据|结果|对照/ },
-    { name: "论文与投稿", re: /论文|投稿|约稿|期刊|杂志|作者|通讯|审稿|基金|返修|初稿|文献/ },
-    { name: "临床与病例", re: /病例|患者|临床|手术|门诊|交班|并发症|夹层|损伤|血肿|血管|疗效|治疗/ },
-    { name: "资料与流程", re: /收集|保存|标本|样本|病历|病史|冰箱|培训|志愿者|证书|交通费|报销|补贴|费用|制备|切片/ },
-    { name: "项目安排", re: /安排|计划|下一步|下周|周一|周二|周三|周四|周五|截止|提交|准备|完成|跟进|负责|开展|参加/ },
-    { name: "风险与待确认", re: /风险|问题|不良|禁止|误差|伦理|合规|缺失|待确认|未定|没有|未中|需要核对|不确定|争议/ }
+    { name: "志愿者与培训", re: /志愿者|岗前培训|培训|证书|经济补贴|补贴|交通费|报销|简餐|知情同意|招募|受试者/, weight: 2.1 },
+    { name: "标本与材料", re: /标本|样本|斑块|核心|切片|冰箱|-80度|19号楼|禁外人|采集|保存|收集/, weight: 2.0 },
+    { name: "研究与实验", re: /实验|研究|课题|机制|细胞|线粒体|氧化|磷酸化|溶酶体|蛋白|基因|染色|GSE\d*|数据|结果|对照|培养/, weight: 1.3 },
+    { name: "论文与投稿", re: /论文|投稿|约稿|期刊|杂志|作者|通讯|审稿|基金|返修|初稿|文献/, weight: 1.3 },
+    { name: "临床与病例", re: /病例|患者|临床|手术|门诊|交班|并发症|夹层|损伤|血肿|血管|疗效|治疗/, weight: 1.2 },
+    { name: "病例与资料", re: /病历|病史|首页|影像|随访|资料|文档/, weight: 1.2 },
+    { name: "项目安排", re: /安排|计划|下一步|下周|周一|周二|周三|周四|周五|截止|提交|准备|完成|跟进|负责|开展|参加/, weight: 1.0 },
+    { name: "风险与待确认", re: /风险|问题|不良|禁止|虚诈|虚假|误差|伦理|合规|缺失|待确认|未定|没有|未中|需要核对|不确定|争议/, weight: 1.2 }
   ];
 
   const ACTION_RE = /需要|安排|计划|下一步|完成|收集|提交|准备|跟进|确认|核对|整理|投稿|参加|培训|禁止|联系|开展|补充|修正/;
@@ -33,12 +35,16 @@
     noticeSettingsBtn: document.getElementById("noticeSettingsBtn"), notice: document.getElementById("notice"),
     modeBadge: document.getElementById("modeBadge"), tabs: [...document.querySelectorAll(".tab")],
     summaryPanel: document.getElementById("summaryPanel"), askPanel: document.getElementById("askPanel"),
-    polishPanel: document.getElementById("polishPanel"), summaryBtn: document.getElementById("summaryBtn"),
+    polishPanel: document.getElementById("polishPanel"), savePanel: document.getElementById("savePanel"),
+    summaryBtn: document.getElementById("summaryBtn"),
     summaryResult: document.getElementById("summaryResult"), questionInput: document.getElementById("questionInput"),
     askBtn: document.getElementById("askBtn"), askResult: document.getElementById("askResult"),
     polishStyle: document.getElementById("polishStyle"), polishBtn: document.getElementById("polishBtn"),
     polishResult: document.getElementById("polishResult"), copyBtn: document.getElementById("copyBtn"),
     downloadBtn: document.getElementById("downloadBtn"), statusText: document.getElementById("statusText"),
+    saveTitle: document.getElementById("saveTitle"), saveWorkBtn: document.getElementById("saveWorkBtn"),
+    newSaveBtn: document.getElementById("newSaveBtn"), saveSummary: document.getElementById("saveSummary"),
+    exportAllBtn: document.getElementById("exportAllBtn"), savedList: document.getElementById("savedList"),
     settingsModal: document.getElementById("settingsModal"), baseUrlInput: document.getElementById("baseUrlInput"),
     modelInput: document.getElementById("modelInput"), apiKeyInput: document.getElementById("apiKeyInput"),
     rememberKey: document.getElementById("rememberKey"), saveSettingsBtn: document.getElementById("saveSettingsBtn"),
@@ -48,6 +54,8 @@
   let settings = loadSettings();
   let notes = localStorage.getItem(STORAGE_KEYS.notes) || "";
   let latestResults = { summary: "", ask: "", polish: "" };
+  let savedItems = loadSavedItems();
+  let currentSaveId = null;
   let activeTab = "summary";
   let saveTimer = 0;
   let toastTimer = 0;
@@ -55,6 +63,17 @@
   function loadSettings() {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || "{}") }; }
     catch { return { ...DEFAULT_SETTINGS }; }
+  }
+
+  function loadSavedItems() {
+    try {
+      const value = JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || "[]");
+      return Array.isArray(value) ? value : [];
+    } catch { return []; }
+  }
+
+  function persistSavedItems() {
+    localStorage.setItem(STORAGE_KEYS.saved, JSON.stringify(savedItems));
   }
 
   function saveSettingsToStorage() {
@@ -113,6 +132,8 @@
     els.summaryPanel.hidden = tab !== "summary";
     els.askPanel.hidden = tab !== "ask";
     els.polishPanel.hidden = tab !== "polish";
+    els.savePanel.hidden = tab !== "save";
+    if (tab === "save") renderSavedList();
   }
 
   function renderMode() {
@@ -191,7 +212,9 @@
   function normalizeLines(text) {
     const raw = String(text || "").replace(/\r/g, "").split("\n").map((line) => line.trim()).filter(Boolean);
     const lines = [];
-    raw.forEach((line) => {
+    raw.forEach((rawLine) => {
+      let line = rawLine.replace(/^(?:[-*+]\s+|\\[-*+]\s+)+/, "").trim();
+      if (!line) return;
       if (line.length > 95 && !/[，。；！？、]\s*$/.test(line)) {
         line.split(/(?<=[。！？；])/).map((part) => part.trim()).filter(Boolean).forEach((part) => lines.push(part));
       } else lines.push(line);
@@ -200,8 +223,11 @@
   }
 
   function classifyLine(line) {
-    for (const rule of CATEGORY_RULES) if (rule.re.test(line)) return rule.name;
-    return "其他要点";
+    const scored = CATEGORY_RULES.map((rule, index) => {
+      const count = line.split(rule.re).length - 1;
+      return { name: rule.name, score: count * rule.weight, index };
+    }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.index - b.index);
+    return scored.length ? scored[0].name : "其他要点";
   }
 
   function localSummary(text) {
@@ -215,12 +241,13 @@
     const actionLines = lines.filter((line) => ACTION_RE.test(line)).slice(0, 12);
     const numberLines = lines.filter((line) => NUMBER_RE.test(line)).slice(0, 12);
     NUMBER_RE.lastIndex = 0;
-    const overviewTopics = [...groups.keys()].filter((name) => name !== "其他要点").slice(0, 4);
+    const orderedGroups = [...groups.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "zh-CN"));
+    const overviewTopics = orderedGroups.map(([name]) => name).filter((name) => name !== "其他要点").slice(0, 4);
     const overview = overviewTopics.length
-      ? `本次记录主要涉及${overviewTopics.join("、")}等方面，共整理出${lines.length}条有效要点。`
+      ? `本次记录主要涉及${overviewTopics.join("、")}等方面，共整理出${lines.length}条有效要点。类别按内容数量从多到少排列。`
       : `本次记录共整理出${lines.length}条有效要点，建议进一步补充会议背景和结论。`;
-    const output = ["# 会议纪要整理（本地基础版）", "", "## 一句话概览", overview, "", "## 主题分类"];
-    groups.forEach((items, category) => {
+    const output = ["# 会议纪要整理（本地基础版）", "", "## 一句话概览", overview, "", "## 主题分类（按内容数量排序）"];
+    orderedGroups.forEach(([category, items]) => {
       output.push("", `### ${category}`);
       items.slice(0, 18).forEach((item) => output.push(`- ${item}`));
       if (items.length > 18) output.push(`- 另有 ${items.length - 18} 条同类记录，建议配置模型接口后继续整合。`);
@@ -414,7 +441,10 @@
     } finally { setLoading(els.polishBtn, false); }
   }
 
-  function getActiveResult() { return latestResults[activeTab] || ""; }
+  function getActiveResult() {
+    const key = activeTab === "save" ? "summary" : activeTab;
+    return latestResults[key] || "";
+  }
 
   async function copyResult() {
     const text = getActiveResult();
@@ -423,7 +453,7 @@
       await navigator.clipboard.writeText(text);
       showToast("结果已复制");
     } catch {
-      const node = activeTab === "summary" ? els.summaryResult : activeTab === "ask" ? els.askResult : els.polishResult;
+      const node = activeTab === "ask" ? els.askResult : activeTab === "polish" ? els.polishResult : els.summaryResult;
       const range = document.createRange();
       range.selectNodeContents(node);
       const selection = window.getSelection();
@@ -435,19 +465,145 @@
     }
   }
 
-  function downloadResult() {
-    const text = getActiveResult();
-    if (!text) return showToast("当前还没有可导出的结果");
+  function downloadText(text, filename) {
     const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `会议纪要整理_${new Date().toISOString().slice(0, 10)}.md`;
+    anchor.download = filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadResult() {
+    const text = getActiveResult();
+    if (!text) return showToast("当前还没有可导出的结果");
+    downloadText(text, `会议纪要整理_${new Date().toISOString().slice(0, 10)}.md`);
     showToast("已导出 Markdown");
+  }
+
+  function createSavedId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+    return `saved-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function formatSavedDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "时间未知";
+    return date.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function buildSavedMarkdown(item) {
+    const parts = [`# ${item.title || "会议纪要"}`, "", `保存时间：${formatSavedDate(item.updatedAt || item.createdAt)}`, "", "## 原始纪要", "", item.notes || ""];
+    if (item.results?.summary) parts.push("", "---", "", "# 结构化总结", "", item.results.summary);
+    if (item.results?.ask) parts.push("", "---", "", "# 原文问答", "", item.results.ask);
+    if (item.results?.polish) parts.push("", "---", "", "# 润色结果", "", item.results.polish);
+    return parts.join("\n");
+  }
+
+  function renderSavedResults() {
+    if (latestResults.summary) showResult(els.summaryResult, latestResults.summary);
+    else showEmpty(els.summaryResult, "等待整理", "导入或粘贴纪要后，点击“生成结构化纪要”。");
+    if (latestResults.ask) showResult(els.askResult, latestResults.ask);
+    else showEmpty(els.askResult, "等待提问", "答案会尽量附上对应的原文依据。");
+    if (latestResults.polish) showResult(els.polishResult, latestResults.polish);
+    else showEmpty(els.polishResult, "等待润色", "原记录不完整也可以处理，缺失事实会保留为待确认项。");
+  }
+
+  function renderSavedList() {
+    if (!savedItems.length) {
+      els.saveSummary.textContent = "还没有保存内容";
+      els.savedList.innerHTML = '<div class="saved-empty">保存后，会在这里显示纪要名称、保存时间和内容摘要。</div>';
+      return;
+    }
+    const sorted = [...savedItems].sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    els.saveSummary.textContent = `已保存 ${savedItems.length} 份`;
+    els.savedList.innerHTML = sorted.map((item) => {
+      const snippet = String(item.notes || "").replace(/\s+/g, " ").slice(0, 110) || "没有原始纪要内容";
+      return `<article class="saved-card ${item.id === currentSaveId ? "active" : ""}">
+        <div class="saved-card-head">
+          <div><h4>${escapeHtml(item.title || "未命名纪要")}</h4><time>${escapeHtml(formatSavedDate(item.updatedAt || item.createdAt))}</time></div>
+        </div>
+        <p class="saved-snippet">${escapeHtml(snippet)}</p>
+        <div class="saved-card-actions">
+          <button type="button" data-save-action="open" data-save-id="${escapeHtml(item.id)}">打开</button>
+          <button type="button" data-save-action="export" data-save-id="${escapeHtml(item.id)}">导出</button>
+          <button class="danger" type="button" data-save-action="delete" data-save-id="${escapeHtml(item.id)}">删除</button>
+        </div>
+      </article>`;
+    }).join("");
+  }
+
+  function saveCurrentWork() {
+    const text = getNotes();
+    if (!text) return showToast("请先粘贴或导入会议纪要");
+    const now = new Date().toISOString();
+    const fallbackTitle = `会议纪要 ${new Date().toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+    const title = els.saveTitle.value.trim() || fallbackTitle;
+    if (currentSaveId) {
+      const item = savedItems.find((entry) => entry.id === currentSaveId);
+      if (item) {
+        item.title = title;
+        item.notes = text;
+        item.results = { ...latestResults };
+        item.updatedAt = now;
+      } else currentSaveId = null;
+    }
+    if (!currentSaveId) {
+      const item = { id: createSavedId(), title, notes: text, results: { ...latestResults }, createdAt: now, updatedAt: now };
+      savedItems.push(item);
+      currentSaveId = item.id;
+    }
+    els.saveTitle.value = title;
+    persistSavedItems();
+    renderSavedList();
+    setStatus(`已保存：${title}`);
+    showToast("当前工作已保存到浏览器");
+  }
+
+  function openSavedItem(id) {
+    const item = savedItems.find((entry) => entry.id === id);
+    if (!item) return showToast("这条保存记录不存在");
+    currentSaveId = item.id;
+    updateNotes(item.notes || "");
+    latestResults = {
+      summary: item.results?.summary || "",
+      ask: item.results?.ask || "",
+      polish: item.results?.polish || ""
+    };
+    els.saveTitle.value = item.title || "";
+    renderSavedResults();
+    renderSavedList();
+    switchTab("summary");
+    setStatus(`已打开：${item.title || "未命名纪要"}`);
+    showToast("已打开保存的纪要");
+  }
+
+  function deleteSavedItem(id) {
+    const item = savedItems.find((entry) => entry.id === id);
+    if (!item) return;
+    if (!window.confirm(`确定删除“${item.title || "未命名纪要"}”吗？`)) return;
+    savedItems = savedItems.filter((entry) => entry.id !== id);
+    if (currentSaveId === id) currentSaveId = null;
+    persistSavedItems();
+    renderSavedList();
+    showToast("已删除保存记录");
+  }
+
+  function exportSavedItem(id) {
+    const item = savedItems.find((entry) => entry.id === id);
+    if (!item) return showToast("这条保存记录不存在");
+    downloadText(buildSavedMarkdown(item), `${(item.title || "会议纪要").replace(/[\\/:*?"<>|]/g, "_")}.md`);
+    showToast("已导出保存记录");
+  }
+
+  function exportAllSaved() {
+    if (!savedItems.length) return showToast("还没有可备份的保存记录");
+    const content = savedItems.map(buildSavedMarkdown).join("\n\n---\n\n");
+    downloadText(content, `会议纪要备份_${new Date().toISOString().slice(0, 10)}.md`);
+    showToast("已备份全部保存记录");
   }
 
   async function handleFile(file) {
@@ -623,6 +779,23 @@
   els.noticeSettingsBtn.addEventListener("click", openSettings);
   els.saveSettingsBtn.addEventListener("click", saveSettings);
   els.resetSettingsBtn.addEventListener("click", resetSettings);
+  els.saveWorkBtn.addEventListener("click", saveCurrentWork);
+  els.exportAllBtn.addEventListener("click", exportAllSaved);
+  els.newSaveBtn.addEventListener("click", () => {
+    currentSaveId = null;
+    els.saveTitle.value = "";
+    renderSavedList();
+    setStatus("可以保存为一份新纪要");
+    showToast("已切换到新建保存");
+  });
+  els.savedList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-save-action]");
+    if (!button) return;
+    const id = button.dataset.saveId;
+    if (button.dataset.saveAction === "open") openSavedItem(id);
+    else if (button.dataset.saveAction === "export") exportSavedItem(id);
+    else if (button.dataset.saveAction === "delete") deleteSavedItem(id);
+  });
   document.querySelectorAll("[data-close-modal]").forEach((el) => el.addEventListener("click", closeSettings));
   window.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSettings(); });
 
@@ -630,6 +803,8 @@
     if (getNotes() && !window.confirm("确定清空当前会议纪要吗？")) return;
     updateNotes("", "已清空");
     latestResults = { summary: "", ask: "", polish: "" };
+    currentSaveId = null;
+    els.saveTitle.value = "";
     showEmpty(els.summaryResult, "等待整理", "导入或粘贴纪要后，点击“生成结构化纪要”。");
     showEmpty(els.askResult, "等待提问", "答案会尽量附上对应的原文依据。");
     showEmpty(els.polishResult, "等待润色", "原记录不完整也可以处理，缺失事实会保留为待确认项。");
@@ -647,6 +822,14 @@
   els.fileInput.addEventListener("change", () => handleFile(els.fileInput.files?.[0]));
 
   updateNotes(notes);
+  renderSavedList();
   renderMode();
   if (settings.apiKey) setStatus("模型增强模式已就绪");
 })();
+
+
+
+
+
+
+
