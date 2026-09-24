@@ -531,9 +531,21 @@
     return latestResults[key] || "";
   }
 
+  function toPlainCopyText(markdown) {
+    return String(markdown || "")
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/#/g, "")
+      .replace(/\*\*/g, "")
+      .replace(/^>\s?/gm, "")
+      .replace(/^\s*---+\s*$/gm, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
   async function copyResult() {
-    const text = getActiveResult();
-    if (!text) return showToast("当前还没有可复制的结果");
+    const raw = getActiveResult();
+    if (!raw) return showToast("当前还没有可复制的结果");
+    const text = toPlainCopyText(raw);
     try {
       await navigator.clipboard.writeText(text);
       showToast("结果已复制");
@@ -911,6 +923,7 @@
   renderMode();
   if (settings.apiKey) setStatus("模型增强模式已就绪");
 })();
+
 
 
 
